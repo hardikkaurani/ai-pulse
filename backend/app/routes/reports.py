@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -29,5 +29,28 @@ def my_report(m: models.Membership = Depends(current_membership), db: Session = 
         "average_score": round(avg, 2) if avg is not None else None,
         "level": maturity_level(avg),
         "risks": flags,
-        "next_steps": NEXT_STEPS.get(m.job_role, NEXT_STEPS["manager"]),
+        "next_steps": NEXT_STEPS.get(m.job_role, NEXT_STEPS["manager"]) if rows else [],
+    }
+
+
+@router.delete("/me")
+def delete_my_report(m: models.Membership = Depends(current_membership), db: Session = Depends(get_db)):
+    """
+    Deletes all diagnostic answers and generated report data for the authenticated
+    user's current organization membership.
+    """
+    try:
+        deleted_count = (
+            db.query(models.Response)
+            .filter_by(membership_id=m.id)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete diagnostic data") from exc
+
+    return {
+        "deleted": deleted_count,
+        "message": "All diagnostic answers and report data deleted successfully",
     }

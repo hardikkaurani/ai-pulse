@@ -25,3 +25,25 @@ def test_lead_manager_gets_policy_questions():
     got = ids(questions_for("manager", "lead"))
     assert "mgr-policy" in got
     assert "mgr-open" in got
+    assert "mgr-adoption" in got
+
+
+def test_mid_engineer_gets_mid_but_not_senior_questions():
+    got = ids(questions_for("engineering", "mid"))
+    assert "eng-assistant" in got
+    assert "eng-review" in got
+    assert "eng-arch" not in got
+
+
+def test_lead_engineer_gets_all_engineering_questions():
+    got = ids(questions_for("engineering", "lead"))
+    assert "eng-assistant" in got
+    assert "eng-review" in got
+    assert "eng-arch" in got
+
+
+def test_unknown_seniority_defaults_to_junior():
+    got = ids(questions_for("engineering", "intern_or_unknown"))
+    assert "eng-assistant" in got
+    assert "eng-review" not in got
+    assert "eng-arch" not in got

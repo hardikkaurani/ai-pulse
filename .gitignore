@@ -2,5 +2,11 @@ node_modules/
 dist/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 *.db
+*.sqlite
+*.sqlite3
 .pytest_cache/
+.env.local
+.DS_Store

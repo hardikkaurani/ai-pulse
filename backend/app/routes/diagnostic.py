@@ -53,3 +53,22 @@ def submit(body: SubmitIn, m: models.Membership = Depends(current_membership), d
         db.add(resp)
     db.commit()
     return {"saved": len(body.answers)}
+
+
+@router.delete("/my-data")
+def delete_my_diagnostic(m: models.Membership = Depends(current_membership), db: Session = Depends(get_db)):
+    try:
+        deleted_count = (
+            db.query(models.Response)
+            .filter_by(membership_id=m.id)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete diagnostic data") from exc
+
+    return {
+        "deleted": deleted_count,
+        "message": "All diagnostic answers deleted successfully",
+    }

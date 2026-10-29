@@ -11,7 +11,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 PRIVACY_THRESHOLD = 5
 
 
-def level_for(avg):
+def level_for(avg: float | None) -> str:
     if avg is None:
         return "Not assessed"
     if avg < 1.5:
@@ -67,20 +67,15 @@ def compute_member_diagnostic(m: models.Membership, rows: list[models.Response])
     return True, emp_avg, emp_flags
 
 
-@router.get("")
-def org_dashboard(
-    org_id: int | None = None,
-    m: models.Membership = Depends(current_membership),
-    db: Session = Depends(get_db),
-):
-    if m.role != "admin":
-        raise HTTPException(403, "Admins only")
+def compute_dashboard_aggregates(db: Session, target_org_id: int) -> dict:
+    """Computes privacy-preserving department and organization aggregates.
 
-    # Security: Ensure administrator can only access their authorized organization
-    target_org_id = m.org_id
-    if org_id is not None and org_id != m.org_id:
-        raise HTTPException(403, "Not authorized for this organization")
-
+    Privacy Rules:
+    - Minimum threshold k = 5 completed respondents for individual department visibility.
+    - Suppressed departments are excluded from individual view and risk rankings.
+    - 'Other teams' aggregate is only formed if at least 2 small departments exist
+      AND their combined completed respondents >= 5.
+    """
     org = db.get(models.Organization, target_org_id)
     if not org:
         raise HTTPException(404, "Organization not found")
@@ -107,6 +102,7 @@ def org_dashboard(
         dept_members = [x for x in members if x.department_id == dept.id]
         completed_scores = []
         dept_flags = []
+        dept_flag_counts: dict[str, int] = {}
 
         for dm in dept_members:
             mem_responses = responses_by_mem_id.get(dm.id, [])
@@ -114,6 +110,8 @@ def org_dashboard(
             if is_complete and emp_avg is not None:
                 completed_scores.append(emp_avg)
                 dept_flags.extend(emp_flags)
+                for f in emp_flags:
+                    dept_flag_counts[f] = dept_flag_counts.get(f, 0) + 1
 
         completed_count = len(completed_scores)
         dept_avg = (
@@ -123,12 +121,14 @@ def org_dashboard(
         )
 
         dept_summary = {
+            "id": dept.id,
             "department": dept.name,
             "employees": len(dept_members),
             "completed": completed_count,
             "responded": completed_count,
             "average_score": round(dept_avg, 2) if dept_avg is not None else None,
             "level": level_for(dept_avg),
+            "risk_counts": dept_flag_counts,
             "_flags": dept_flags,
             "_completed_scores": completed_scores,
         }
@@ -136,45 +136,48 @@ def org_dashboard(
         if completed_count >= PRIVACY_THRESHOLD:
             # Department satisfies threshold: individually visible
             qualifying_departments.append(dept_summary)
-            # Accumulate risk flags into organization top risks
             for f in dept_flags:
                 qualifying_flags[f] = qualifying_flags.get(f, 0) + 1
         else:
-            # Department is below privacy threshold: suppressed from individual view
+            # Department is below privacy threshold: suppressed
             small_departments_data.append(dept_summary)
 
-    # Privacy preservation for small departments:
-    # An "Other teams" group is only created if:
-    # 1. Total completed employees in the aggregate >= PRIVACY_THRESHOLD (5)
-    # 2. It aggregates at least 2 distinct small departments (to prevent deanonymizing a single small team)
+    # Other teams aggregation
     total_small_completed = sum(d["completed"] for d in small_departments_data)
     total_small_employees = sum(d["employees"] for d in small_departments_data)
     all_small_scores = [s for d in small_departments_data for s in d["_completed_scores"]]
 
+    other_flag_counts: dict[str, int] = {}
     if len(small_departments_data) >= 2 and total_small_completed >= PRIVACY_THRESHOLD:
         other_avg = sum(all_small_scores) / len(all_small_scores) if all_small_scores else None
+        for d in small_departments_data:
+            for f, count in d.get("risk_counts", {}).items():
+                other_flag_counts[f] = other_flag_counts.get(f, 0) + count
+
         other_summary = {
+            "id": "other",
             "department": "Other teams",
             "employees": total_small_employees,
             "completed": total_small_completed,
             "responded": total_small_completed,
             "average_score": round(other_avg, 2) if other_avg is not None else None,
             "level": level_for(other_avg),
+            "risk_counts": other_flag_counts,
         }
         qualifying_departments.append(other_summary)
-        # Add flags from "Other teams" since the aggregate meets the threshold
         for d in small_departments_data:
             for f in d["_flags"]:
                 qualifying_flags[f] = qualifying_flags.get(f, 0) + 1
 
-    # Format department list, stripping internal calculation helpers
     formatted_departments = [
         {
+            "id": d.get("id"),
             "department": d["department"],
             "employees": d["employees"],
             "responded": d["responded"],
             "average_score": d["average_score"],
             "level": d["level"],
+            "risk_counts": d.get("risk_counts", {}),
         }
         for d in qualifying_departments
     ]
@@ -183,4 +186,22 @@ def org_dashboard(
         "organization": org.name,
         "departments": formatted_departments,
         "top_risks": sorted(qualifying_flags.items(), key=lambda kv: -kv[1])[:5],
+        "hidden_small_groups": len(small_departments_data) > 0,
     }
+
+
+@router.get("")
+def org_dashboard(
+    org_id: int | None = None,
+    m: models.Membership = Depends(current_membership),
+    db: Session = Depends(get_db),
+):
+    if m.role != "admin":
+        raise HTTPException(403, "Admins only")
+
+    # Security: Ensure administrator can only access their authorized organization
+    target_org_id = m.org_id
+    if org_id is not None and org_id != m.org_id:
+        raise HTTPException(403, "Not authorized for this organization")
+
+    return compute_dashboard_aggregates(db, target_org_id)

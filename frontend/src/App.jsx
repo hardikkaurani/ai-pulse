@@ -4,26 +4,30 @@ import OrgPicker from "./pages/OrgPicker.jsx";
 import Diagnostic from "./pages/Diagnostic.jsx";
 import Report from "./pages/Report.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import Insights from "./pages/Insights.jsx";
 import { clearToken } from "./api.js";
 
 export default function App() {
   const [step, setStep] = useState("login");
   const [session, setSession] = useState(null);
   const [org, setOrg] = useState(null);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
 
   function handleLogout() {
     clearToken();
     setSession(null);
     setOrg(null);
+    setSelectedDepartment(null);
     setStep("login");
   }
 
   function handleSwitchOrg() {
     setOrg(null);
+    setSelectedDepartment(null);
     setStep("org");
   }
 
-  const isWide = step === "dashboard";
+  const isWide = step === "dashboard" || step === "insights";
 
   return (
     <div className="app-shell">
@@ -53,12 +57,23 @@ export default function App() {
               {org && (
                 <nav className="nav-links">
                   {org.role === "admin" && (
-                    <button
-                      className={`nav-link-btn ${step === "dashboard" ? "active" : ""}`}
-                      onClick={() => setStep("dashboard")}
-                    >
-                      Leadership Dashboard
-                    </button>
+                    <>
+                      <button
+                        className={`nav-link-btn ${step === "dashboard" ? "active" : ""}`}
+                        onClick={() => setStep("dashboard")}
+                      >
+                        Leadership Dashboard
+                      </button>
+                      <button
+                        className={`nav-link-btn ${step === "insights" ? "active" : ""}`}
+                        onClick={() => {
+                          setSelectedDepartment(null);
+                          setStep("insights");
+                        }}
+                      >
+                        ✨ AI Insights
+                      </button>
+                    </>
                   )}
                   <button
                     className={`nav-link-btn ${step === "diagnostic" ? "active" : ""}`}
@@ -138,7 +153,22 @@ export default function App() {
         {step === "dashboard" && org && (
           <Dashboard
             org={org}
-            onNavigate={(target) => setStep(target)}
+            onNavigate={(target, dept) => {
+              if (target === "insights") {
+                setSelectedDepartment(dept || null);
+                setStep("insights");
+              } else {
+                setStep(target);
+              }
+            }}
+          />
+        )}
+
+        {step === "insights" && org && (
+          <Insights
+            org={org}
+            department={selectedDepartment}
+            onBack={() => setStep("dashboard")}
           />
         )}
       </main>

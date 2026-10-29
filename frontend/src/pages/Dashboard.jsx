@@ -105,6 +105,15 @@ export default function Dashboard({ org, onNavigate }) {
             {refreshing ? "Refreshing…" : "↻ Refresh"}
           </button>
           {onNavigate && (
+            <button
+              onClick={() => onNavigate("insights")}
+              className="btn-primary"
+              title="View AI governance recommendations"
+            >
+              ✨ AI Insights
+            </button>
+          )}
+          {onNavigate && (
             <button onClick={() => onNavigate("diagnostic")} className="btn-outline">
               Take Diagnostic
             </button>
@@ -173,6 +182,7 @@ export default function Dashboard({ org, onNavigate }) {
                   <th>Maturity Level</th>
                   <th>Average Score</th>
                   <th>Headcount &amp; Participation</th>
+                  <th>Governance</th>
                 </tr>
               </thead>
               <tbody>
@@ -205,6 +215,17 @@ export default function Dashboard({ org, onNavigate }) {
                       <td className="headcount-cell">
                         <div><strong>{dept.responded}</strong> / {dept.employees} employees</div>
                         <div className="muted text-sm">{pct}% completion</div>
+                      </td>
+                      <td>
+                        {onNavigate && (
+                          <button
+                            onClick={() => onNavigate("insights", dept)}
+                            className="btn-outline btn-sm"
+                            title={`View AI governance insights for ${dept.department}`}
+                          >
+                            Insights →
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

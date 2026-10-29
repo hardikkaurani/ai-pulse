@@ -1,21 +1,9 @@
 import json
 import os
+import hashlib
 
 _PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "questions.json")
-
-SENIORITY_RANKS = {
-    "junior": 1,
-    "mid": 2,
-    "senior": 3,
-    "lead": 4,
-}
-
-
-def seniority_rank(seniority: str) -> int:
-    """Return numeric rank for a seniority level; defaults to junior (1) if unknown."""
-    if not isinstance(seniority, str):
-        return 1
-    return SENIORITY_RANKS.get(seniority.strip().lower(), 1)
+RANK = {"junior": 0, "mid": 1, "senior": 2, "lead": 3}
 
 
 def load_questions():
@@ -25,13 +13,19 @@ def load_questions():
 
 def questions_for(job_role: str, seniority: str):
     """Common questions for everyone + questions for this job role, filtered by seniority."""
+    if seniority not in RANK:
+        raise ValueError("Unknown seniority")
     result = []
-    user_rank = seniority_rank(seniority)
     for q in load_questions():
         if q["roles"] != ["all"] and job_role not in q["roles"]:
             continue
-        min_required = q.get("min_seniority", "junior")
-        if user_rank < seniority_rank(min_required):
+        if RANK[seniority] < RANK[q.get("min_seniority", "junior")]:
             continue
         result.append(q)
     return result
+
+
+def question_version():
+    return hashlib.sha256(
+        json.dumps(load_questions(), sort_keys=True).encode()
+    ).hexdigest()[:12]

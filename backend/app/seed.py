@@ -1,97 +1,319 @@
-"""Creates demo data. Run: python -m app.seed
+"""Synthetic demo data. Idempotent: never drops or resets an existing database."""
 
-All passwords are: pulse123
-"""
-from .db import Base, engine, SessionLocal
-from . import models
+import argparse
+from .db import SessionLocal
+from . import models, config
 from .auth import hash_password
+from .services.questions import questions_for, question_version
+from .services.actions import create_plan
 
-PEOPLE_NORTHWIND = [
-    # name, email, department, role, job_role, seniority
-    ("Asha Rao", "asha@northwind.test", None, "admin", "manager", "lead"),
-    ("Vikram Shah", "vikram@northwind.test", "Sales", "employee", "sales", "senior"),
-    ("Neha Gupta", "neha@northwind.test", "Sales", "employee", "sales", "junior"),
-    ("Rohan Mehta", "rohan@northwind.test", "Sales", "employee", "sales", "mid"),
-    ("Priya Nair", "priya@northwind.test", "Support", "employee", "support", "junior"),
-    ("Arjun Iyer", "arjun@northwind.test", "Support", "employee", "support", "senior"),
-    ("Kavitha Menon", "kavitha@northwind.test", "Support", "employee", "support", "mid"),
-    ("Dev Malhotra", "dev@northwind.test", "Engineering", "employee", "engineering", "lead"),
-    ("Sara Thomas", "sara@northwind.test", "Engineering", "employee", "engineering", "mid"),
-    ("Imran Khan", "imran@northwind.test", "HR", "employee", "manager", "senior"),
+PEOPLE = [
+    (
+        "Asha Rao",
+        "asha@northwind.test",
+        "Northwind Logistics",
+        None,
+        "admin",
+        "manager",
+        "lead",
+    ),
+    (
+        "Meera Pillai",
+        "meera@bluepeak.test",
+        "Bluepeak Retail",
+        None,
+        "admin",
+        "manager",
+        "lead",
+    ),
+    (
+        "Ravi Kapoor",
+        "ravi@consult.test",
+        "Northwind Logistics",
+        "HR",
+        "employee",
+        "manager",
+        "senior",
+    ),
+    (
+        "Ravi Kapoor",
+        "ravi@consult.test",
+        "Bluepeak Retail",
+        None,
+        "admin",
+        "manager",
+        "senior",
+    ),
+    (
+        "Priya Nair",
+        "priya@northwind.test",
+        "Northwind Logistics",
+        "Support",
+        "employee",
+        "support",
+        "junior",
+    ),
+    (
+        "Arjun Iyer",
+        "arjun@northwind.test",
+        "Northwind Logistics",
+        "Support",
+        "employee",
+        "support",
+        "senior",
+    ),
+    (
+        "Kavitha Menon",
+        "kavitha@northwind.test",
+        "Northwind Logistics",
+        "Support",
+        "employee",
+        "support",
+        "mid",
+    ),
+    (
+        "Maya Das",
+        "maya@northwind.test",
+        "Northwind Logistics",
+        "Support",
+        "employee",
+        "support",
+        "mid",
+    ),
+    (
+        "Ishaan Sen",
+        "ishaan@northwind.test",
+        "Northwind Logistics",
+        "Support",
+        "employee",
+        "support",
+        "junior",
+    ),
+    (
+        "New Participant",
+        "new@northwind.test",
+        "Northwind Logistics",
+        "Support",
+        "employee",
+        "support",
+        "junior",
+    ),
+    (
+        "Dev Malhotra",
+        "dev@northwind.test",
+        "Northwind Logistics",
+        "Engineering",
+        "employee",
+        "engineering",
+        "lead",
+    ),
+    (
+        "Sara Thomas",
+        "sara@northwind.test",
+        "Northwind Logistics",
+        "Engineering",
+        "employee",
+        "engineering",
+        "mid",
+    ),
+    (
+        "Aarav Shah",
+        "aarav@northwind.test",
+        "Northwind Logistics",
+        "Engineering",
+        "employee",
+        "engineering",
+        "senior",
+    ),
+    (
+        "Zoya Khan",
+        "zoya@northwind.test",
+        "Northwind Logistics",
+        "Engineering",
+        "employee",
+        "engineering",
+        "mid",
+    ),
+    (
+        "Anika Rao",
+        "anika@northwind.test",
+        "Northwind Logistics",
+        "Engineering",
+        "employee",
+        "engineering",
+        "junior",
+    ),
+    (
+        "Rhea Jain",
+        "rhea@northwind.test",
+        "Northwind Logistics",
+        "Engineering",
+        "employee",
+        "engineering",
+        "senior",
+    ),
+    (
+        "Vikram Shah",
+        "vikram@northwind.test",
+        "Northwind Logistics",
+        "Sales",
+        "employee",
+        "sales",
+        "senior",
+    ),
+    (
+        "Neha Gupta",
+        "neha@northwind.test",
+        "Northwind Logistics",
+        "Sales",
+        "employee",
+        "sales",
+        "junior",
+    ),
+    (
+        "Rohan Mehta",
+        "rohan@northwind.test",
+        "Northwind Logistics",
+        "Sales",
+        "employee",
+        "sales",
+        "mid",
+    ),
+    (
+        "Imran Khan",
+        "imran@northwind.test",
+        "Northwind Logistics",
+        "HR",
+        "employee",
+        "manager",
+        "senior",
+    ),
+    (
+        "Tom Fernandes",
+        "tom@bluepeak.test",
+        "Bluepeak Retail",
+        "Stores",
+        "employee",
+        "sales",
+        "mid",
+    ),
+    (
+        "Lina George",
+        "lina@bluepeak.test",
+        "Bluepeak Retail",
+        "Stores",
+        "employee",
+        "sales",
+        "junior",
+    ),
+    (
+        "Kabir Das",
+        "kabir@bluepeak.test",
+        "Bluepeak Retail",
+        "Customer Care",
+        "employee",
+        "support",
+        "senior",
+    ),
 ]
-PEOPLE_BLUEPEAK = [
-    ("Meera Pillai", "meera@bluepeak.test", None, "admin", "manager", "lead"),
-    ("Tom Fernandes", "tom@bluepeak.test", "Stores", "employee", "sales", "mid"),
-    ("Lina George", "lina@bluepeak.test", "Stores", "employee", "sales", "junior"),
-    ("Kabir Das", "kabir@bluepeak.test", "Customer Care", "employee", "support", "senior"),
-]
 
 
-DEMO_PASSWORD_HASH = "$2b$12$UtmExIoIBtjPQEiqXM5HZ.r92138pjdpXziSuRthXppJSR7QSaR7m"
-
-
-def run(reset: bool = True):
-    if reset:
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-
-    def make_org(name, depts):
-        org = models.Organization(name=name)
-        db.add(org)
-        db.flush()
-        d = {}
-        for dn in depts:
-            dept = models.Department(org_id=org.id, name=dn)
-            db.add(dept)
+def run(db=None):
+    own = db is None
+    db = db or SessionLocal()
+    try:
+        if db.query(models.User).first():
+            return False
+        orgs, departments = {}, {}
+        for name, teams in [
+            ("Northwind Logistics", ["Sales", "Support", "Engineering", "HR"]),
+            ("Bluepeak Retail", ["Stores", "Customer Care"]),
+        ]:
+            org = models.Organization(name=name)
+            db.add(org)
             db.flush()
-            d[dn] = dept.id
-        return org, d
-
-    nw, nw_depts = make_org("Northwind Logistics", ["Sales", "Support", "Engineering", "HR"])
-    bp, bp_depts = make_org("Bluepeak Retail", ["Stores", "Customer Care"])
-
-    users = {}
-
-    def add_people(org, depts, people):
-        for name, email, dept, role, job_role, seniority in people:
-            u = users.get(email)
-            if not u:
-                u = models.User(name=name, email=email, password_hash=DEMO_PASSWORD_HASH)
-                db.add(u)
+            orgs[name] = org
+            for team in teams:
+                department = models.Department(org_id=org.id, name=team)
+                db.add(department)
                 db.flush()
-                users[email] = u
-            db.add(models.Membership(
-                user_id=u.id, org_id=org.id,
-                department_id=depts.get(dept) if dept else None,
-                role=role, job_role=job_role, seniority=seniority,
-            ))
-
-    add_people(nw, nw_depts, PEOPLE_NORTHWIND)
-    add_people(bp, bp_depts, PEOPLE_BLUEPEAK)
-
-    # A consultant who works with both companies
-    add_people(nw, nw_depts, [("Ravi Kapoor", "ravi@consult.test", "HR", "employee", "manager", "senior")])
-    add_people(bp, bp_depts, [("Ravi Kapoor", "ravi@consult.test", None, "admin", "manager", "senior")])
-    db.flush()
-
-    # Some existing results so dashboards aren't empty
-    def answer(email, org, qid, text, score, reason=None, flags=None):
-        m = db.query(models.Membership).filter_by(user_id=users[email].id, org_id=org.id).first()
-        db.add(models.Response(membership_id=m.id, question_id=qid, answer=text, score=score, reason=reason, flags=flags or []))
-
-    answer("vikram@northwind.test", nw, "common-freq", "Daily", 4)
-    answer("vikram@northwind.test", nw, "common-open", "Used ChatGPT to draft 20 follow-up emails and edited each one.", 4, "Regular use with editing.", [])
-    answer("priya@northwind.test", nw, "common-freq", "A few times a month", 2)
-    answer("priya@northwind.test", nw, "common-open", "Pasted a customer's complaint thread into ChatGPT to summarise it.", 3, "Useful summary but shared customer data.", ["customer_data_shared"])
-    answer("tom@bluepeak.test", bp, "common-freq", "A few times a week", 3)
-    answer("kabir@bluepeak.test", bp, "common-open", "Uploaded our full customer refund list to an AI tool to find patterns.", 3, "Good idea, unsafe data handling.", ["customer_data_shared", "confidential_data_shared"])
-    answer("kabir@bluepeak.test", bp, "common-freq", "Daily", 4)
-
-    db.commit()
-    db.close()
-    print("Seeded. Log in with any seeded email and password 'pulse123'.")
+                departments[(name, team)] = department.id
+        users = {}
+        for i, (name, email, org, team, role, job, seniority) in enumerate(PEOPLE):
+            if email not in users:
+                user = models.User(
+                    name=name, email=email, password_hash=hash_password("pulse123")
+                )
+                db.add(user)
+                db.flush()
+                users[email] = user
+            member = models.Membership(
+                user_id=users[email].id,
+                org_id=orgs[org].id,
+                department_id=departments.get((org, team)),
+                role=role,
+                job_role=job,
+                seniority=seniority,
+            )
+            db.add(member)
+            db.flush()
+            if role == "admin" or email.startswith("new@"):
+                continue
+            questions = questions_for(job, seniority)
+            assessment = models.Assessment(
+                membership_id=member.id,
+                status="completed",
+                fingerprint=f"synthetic-{member.id}",
+                question_version=question_version(),
+                question_snapshot=questions,
+                ai_mode="mock",
+                model="demo-fixture",
+                prompt_version=config.PROMPT_VERSION,
+            )
+            db.add(assessment)
+            db.flush()
+            rows = []
+            for q in questions:
+                value = (4 if team == "Engineering" else 2) + (i % 2)
+                if q["type"] == "mcq":
+                    option = q["options"][min(value - 1, len(q["options"]) - 1)]
+                    answer, score = option["text"], option["points"]
+                else:
+                    answer, score = (
+                        "Synthetic example: I used an approved AI tool to draft a reply and checked it before use.",
+                        3,
+                    )
+                row = models.Response(
+                    membership_id=member.id,
+                    assessment_id=assessment.id,
+                    question_id=q["id"],
+                    answer=answer,
+                    score=score,
+                    reason="Synthetic demo data; not a real employee evaluation.",
+                    flags=[],
+                )
+                db.add(row)
+                rows.append(row)
+            create_plan(db, assessment, rows, job)
+        db.commit()
+        return True
+    finally:
+        if own:
+            db.close()
 
 
 if __name__ == "__main__":
-    run(reset=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Create synthetic accounts in an empty database.",
+    )
+    args = parser.parse_args()
+    if not args.demo:
+        parser.error("Explicit --demo is required. This never resets existing data.")
+    print(
+        "Created synthetic demo accounts."
+        if run()
+        else "Database already has users; nothing changed."
+    )

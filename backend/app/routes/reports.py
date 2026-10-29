@@ -1,116 +1,142 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date, timedelta
+from typing import Literal
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import update, delete
 from sqlalchemy.orm import Session
-
 from ..db import get_db
 from .. import models
-from ..auth import current_user, current_membership
+from ..auth import current_membership
 from ..utils import maturity_level
+from ..services.assessments import current
+from ..services.actions import describe
+from ..services.privacy import RISK_LABELS
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
-NEXT_STEPS = {
-    "support": [
-        "Use AI to draft initial ticket replies, then verify and edit before sending",
-        "Summarise complex conversation threads prior to tier-2 escalation",
-        "Never paste identifiable customer details or credentials into public tools",
-    ],
-    "engineering": [
-        "Leverage code completion models for test generation and refactoring",
-        "Perform mandatory human code review on every AI suggestion before merge",
-        "Keep secrets, tokens, and proprietary infrastructure out of external prompts",
-    ],
-    "sales": [
-        "Draft outreach messages with AI and personalise with authentic context",
-        "Automate meeting summary extraction into CRM records",
-        "Double-check AI-generated product claims and pricing before sending",
-    ],
-    "manager": [
-        "Establish and communicate an explicit AI acceptable-use policy for your team",
-        "Select one key workflow per quarter to enhance responsibly with AI",
-        "Measure business outcome quality and time saved, not raw tool activity",
-    ],
-}
-
-
-@router.get("")
-def list_my_reports(user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    """Lists saved diagnostic assessment reports across organizations where the user is an authorized member."""
-    memberships = db.query(models.Membership).filter_by(user_id=user.id).all()
-    results = []
-    for m in memberships:
-        rows = db.query(models.Response).filter_by(membership_id=m.id).all()
-        if not rows:
-            continue
-        scores = [r.score for r in rows if r.score is not None]
-        avg = sum(scores) / len(scores) if scores else None
-        results.append({
-            "org_id": m.org_id,
-            "organization": m.org.name,
-            "role": m.role,
-            "answered": len(rows),
-            "average_score": round(avg, 2) if avg is not None else None,
-            "level": maturity_level(avg),
-            "has_report": True,
-        })
-    return results
-
 
 @router.get("/me")
-def my_report(
-    org_id: int | None = None,
-    m: models.Membership = Depends(current_membership),
-    db: Session = Depends(get_db),
-):
-    """Retrieve the personal diagnostic report for the authenticated employee's active organization."""
-    target_m = m
-    if org_id is not None and org_id != m.org_id:
-        target_m = db.query(models.Membership).filter_by(user_id=m.user_id, org_id=org_id).first()
-        if not target_m:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Not a member of the requested organization")
-
-    rows = db.query(models.Response).filter_by(membership_id=target_m.id).all()
-    scores = [r.score for r in rows if r.score is not None]
-    avg = sum(scores) / len(scores) if scores else None
+def my_report(m=Depends(current_membership), db: Session = Depends(get_db)):
+    assessment = current(db, m.id)
+    base = {"name": m.user.name, "organization": m.org.name, "job_role": m.job_role}
+    if not assessment:
+        legacy = db.query(models.Response).filter_by(membership_id=m.id).count()
+        return {
+            **base,
+            "status": "not_started",
+            "legacy_answers": legacy,
+            "actions": [],
+        }
+    rows = db.query(models.Response).filter_by(assessment_id=assessment.id).all()
+    questions = {q["id"]: q for q in assessment.question_snapshot}
+    rows.sort(key=lambda r: list(questions).index(r.question_id))
+    complete = assessment.status == "completed"
+    avg = (
+        round(sum(r.score for r in rows) / len(rows), 2)
+        if complete and rows and all(r.score is not None for r in rows)
+        else None
+    )
     flags = sorted({f for r in rows for f in (r.flags or [])})
     return {
-        "name": target_m.user.name,
-        "organization": target_m.org.name,
-        "answered": len(rows),
-        "average_score": round(avg, 2) if avg is not None else None,
+        **base,
+        "assessment_id": assessment.id,
+        "status": assessment.status,
+        "average_score": avg,
         "level": maturity_level(avg),
-        "risks": flags,
-        "next_steps": NEXT_STEPS.get(target_m.job_role, NEXT_STEPS["manager"]) if rows else [],
+        "answered": len(rows),
+        "created_at": assessment.created_at,
+        "updated_at": assessment.updated_at,
+        "ai_mode": assessment.ai_mode,
+        "model": assessment.model,
+        "question_version": assessment.question_version,
+        "prompt_version": assessment.prompt_version,
+        "scoring_note": "Each question has equal weight. This is a self-reported diagnostic, not a verified measure of job performance.",
+        "risks": [
+            {"key": f, "label": RISK_LABELS[f]} for f in flags if f in RISK_LABELS
+        ],
+        "answers": [
+            {
+                "question": questions[r.question_id]["text"],
+                "question_id": r.question_id,
+                "type": questions[r.question_id]["type"],
+                "answer": r.answer,
+                "score": r.score,
+                "reason": r.reason,
+                "flags": r.flags or [],
+            }
+            for r in rows
+        ],
+        "actions": [
+            describe(a, m.job_role)
+            for a in db.query(models.Action)
+            .filter_by(assessment_id=assessment.id)
+            .all()
+        ],
+        "error": assessment.error,
     }
 
 
-@router.delete("/me")
-def delete_my_report(
-    org_id: int | None = None,
-    m: models.Membership = Depends(current_membership),
+class ActionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    done: bool
+    due_date: date | None = Field(default=None, strict=False)
+
+
+@router.patch("/me/actions/{action_id}")
+def update_action(
+    action_id: str,
+    body: ActionIn,
+    m=Depends(current_membership),
     db: Session = Depends(get_db),
 ):
-    """Deletes all diagnostic answers and generated report data for the authenticated user's organization membership."""
-    target_m = m
-    if org_id is not None and org_id != m.org_id:
-        target_m = db.query(models.Membership).filter_by(user_id=m.user_id, org_id=org_id).first()
-        if not target_m:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Not a member of the requested organization")
+    # Ownership is checked through the assessment, not a user ID supplied by the browser.
+    action = (
+        db.query(models.Action)
+        .join(models.Assessment)
+        .filter(models.Action.id == action_id, models.Assessment.membership_id == m.id)
+        .first()
+    )
+    if not action:
+        raise HTTPException(404, "Activity not found.")
+    if body.due_date and not date.today() - timedelta(
+        days=30
+    ) <= body.due_date <= date.today() + timedelta(days=365):
+        raise HTTPException(422, "Choose a target date within the next year.")
+    action.done = body.done
+    if "due_date" in body.model_fields_set:
+        action.due_date = body.due_date
+    db.commit()
+    return describe(action, m.job_role)
 
-    try:
-        deleted_count = (
-            db.query(models.Response)
-            .filter_by(membership_id=target_m.id)
-            .delete(synchronize_session=False)
-        )
-        db.commit()
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to delete diagnostic data"
-        ) from exc
 
+@router.delete("/me")
+def delete_my_data(
+    scope: Literal["current", "all"] = "current",
+    m=Depends(current_membership),
+    db: Session = Depends(get_db),
+):
+    memberships = (
+        db.query(models.Membership).filter_by(user_id=m.user_id).all()
+        if scope == "all"
+        else [m]
+    )
+    ids = [member.id for member in memberships]
+    db.execute(
+        update(models.Membership)
+        .where(models.Membership.id.in_(ids))
+        .values(revision=models.Membership.revision + 1)
+    )
+    count = (
+        db.query(models.Response).filter(models.Response.membership_id.in_(ids)).count()
+    )
+    db.execute(delete(models.Response).where(models.Response.membership_id.in_(ids)))
+    db.execute(
+        delete(models.Assessment).where(models.Assessment.membership_id.in_(ids))
+    )
+    db.commit()  # cascades activities; no cached reports or raw-answer audit log to retain
     return {
-        "deleted": deleted_count,
-        "message": "All diagnostic answers and report data deleted successfully",
+        "deleted": True,
+        "scope": scope,
+        "answers_deleted": count,
+        "organizations_affected": len(ids),
     }

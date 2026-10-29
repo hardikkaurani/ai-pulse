@@ -1,84 +1,53 @@
-import React, { useState } from "react";
-import { api, setToken } from "../api.js";
-
-export default function OrgPicker({ orgs = [], userName, onPick, onLogout }) {
-  const [selectingId, setSelectingId] = useState(null);
-  const [error, setError] = useState("");
-
-  async function pick(o) {
-    setSelectingId(o.org_id);
-    setError("");
-
-    try {
-      const selectResult = await api("/auth/select-org", {
-        method: "POST",
-        body: JSON.stringify({ org_id: o.org_id }),
-      });
-      setToken(selectResult.token);
-      onPick(o);
-    } catch (err) {
-      setError(err.message || "Failed to switch organization. Please try again.");
-      setSelectingId(null);
-    }
-  }
-
-  const validOrgs = Array.isArray(orgs) ? orgs : [];
-
+import React from "react";
+import { ArrowRight, Building2, LogOut } from "lucide-react";
+import { Brand, Icon, Badge, ErrorMessage } from "../components";
+import PublicDemoNotice from "../PublicDemoNotice";
+export default function OrgPicker({ session, onPick, busy, error, onLogout }) {
   return (
-    <div className="org-picker-wrap">
-      <div className="card org-picker-card">
-        <div className="org-picker-header">
-          <div className="org-logo">🏢</div>
-          <h2>Select an Organization</h2>
-          <p className="muted">
-            {userName ? `Welcome, ${userName}. ` : ""}Choose the workspace you want to access:
-          </p>
-        </div>
-
-        {error && (
-          <div className="notice-error" role="alert">
-            {error}
-          </div>
-        )}
-
-        {validOrgs.length > 0 ? (
-          <div className="org-list">
-            {validOrgs.map((o) => {
-              const isSelecting = selectingId === o.org_id;
-              const isAdmin = o.role?.toLowerCase() === "admin";
-
-              return (
-                <div key={o.org_id} className="org-item-card">
-                  <div className="org-item-meta">
-                    <span className="org-item-name">{o.org_name}</span>
-                    <span className={`badge ${isAdmin ? "badge-admin" : "badge-member"}`}>
-                      {isAdmin ? "🛡️ Administrator" : "👤 Team Member"}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => pick(o)}
-                    disabled={selectingId !== null}
-                    className="btn-primary"
-                  >
-                    {isSelecting ? "Connecting…" : "Launch Workspace →"}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <p className="muted">You are not currently assigned to any active organizations.</p>
-          </div>
-        )}
-
-        {onLogout && (
-          <div className="org-picker-footer">
-            <button onClick={onLogout} className="btn-secondary text-sm">
-              Sign In with Different Account
+    <div className="org-page">
+      <header>
+        <Brand />
+        <button className="button quiet" onClick={onLogout}>
+          <Icon icon={LogOut} />
+          Sign out
+        </button>
+      </header>
+      <div className="org-content">
+        <PublicDemoNotice />
+        <p className="eyebrow">ONE ACCOUNT. SEPARATE WORKSPACES.</p>
+        <h1>Where are we working today?</h1>
+        <p className="subtitle">
+          Welcome, {session.name.split(" ")[0]}. Your role and data stay within
+          the organization you choose.
+        </p>
+        {error && <ErrorMessage message={error} />}
+        <div className="org-grid">
+          {session.organizations.map((org) => (
+            <button
+              className="org-card panel"
+              key={org.org_id}
+              disabled={busy}
+              onClick={() => onPick(org)}
+            >
+              <span className="org-icon">
+                <Icon icon={Building2} size={25} />
+              </span>
+              <Badge tone={org.role === "admin" ? "purple" : "green"}>
+                {org.role === "admin" ? "Admin" : "Employee"}
+              </Badge>
+              <h2>{org.org_name}</h2>
+              <p>
+                {org.role === "admin"
+                  ? "Explore protected team insights"
+                  : "Your assessment and improvement plan"}
+              </p>
+              <span className="org-cta">
+                {busy ? "Opening workspace…" : "Open workspace"}
+                <Icon icon={ArrowRight} />
+              </span>
             </button>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -1,55 +1,78 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.orm import Session
-
 from ..db import get_db
-from .. import models
-from ..auth import verify_password, hash_password, make_token, current_user
+from .. import models, config
+from ..auth import (
+    verify_password,
+    make_token,
+    current_user,
+    hasher,
+    hash_password,
+    DUMMY_HASH,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+from ..services.rate_limit import rate_limit
 
 
 class LoginIn(BaseModel):
-    email: str
-    password: str
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=1, max_length=256)
 
 
 class SelectOrgIn(BaseModel):
-    org_id: int
+    org_id: int = Field(gt=0, strict=True)
+
+
+def user_info(user):
+    return {
+        "name": user.name,
+        "email": user.email,
+        "ai_mode": config.AI_MODE,
+        "organizations": [
+            {
+                "org_id": m.org_id,
+                "org_name": m.org.name,
+                "role": m.role,
+                "job_role": m.job_role,
+                "seniority": m.seniority,
+            }
+            for m in user.memberships
+        ],
+    }
 
 
 @router.post("/login")
-def login(body: LoginIn, db: Session = Depends(get_db)):
-    """Authenticate with email and password, issuing an unscoped user token."""
+def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
+    rate_limit("login:" + (request.client.host if request.client else "unknown"))
     user = db.query(models.User).filter_by(email=body.email.strip().lower()).first()
-    if not user or not verify_password(body.password, user.password_hash):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Wrong email or password")
-
-    # Transparent security upgrade: migrate legacy unsalted hash to bcrypt upon successful auth
-    if not user.password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+    valid = verify_password(body.password, user.password_hash if user else DUMMY_HASH)
+    if not user or not valid:
+        raise HTTPException(401, "Email or password is incorrect.")
+    if not user.password_hash.startswith("$argon2") or hasher.check_needs_rehash(
+        user.password_hash
+    ):
         user.password_hash = hash_password(body.password)
         db.commit()
+    return {"token": make_token(user.id), **user_info(user)}
 
-    orgs = [
-        {"org_id": m.org_id, "org_name": m.org.name, "role": m.role}
-        for m in user.memberships
-    ]
-    return {"token": make_token(user.id), "name": user.name, "organizations": orgs}
+
+@router.get("/me")
+def me(user=Depends(current_user)):
+    return user_info(user)
 
 
 @router.post("/select-org")
-def select_org(body: SelectOrgIn, user: models.User = Depends(current_user), db: Session = Depends(get_db)):
-    """Verify organization membership and issue an organization-scoped session token."""
-    membership = (
+def select_org(
+    body: SelectOrgIn, user=Depends(current_user), db: Session = Depends(get_db)
+):
+    m = (
         db.query(models.Membership)
         .filter_by(user_id=user.id, org_id=body.org_id)
         .first()
     )
-    if not membership:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not a member of this organization")
-
-    return {
-        "token": make_token(user.id, body.org_id),
-        "org_id": body.org_id,
-        "role": membership.role,
-    }
+    if not m:
+        raise HTTPException(403, "You are not a member of this organization.")
+    return {"token": make_token(user.id, m.org_id), "org_id": m.org_id, "role": m.role}

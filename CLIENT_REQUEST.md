@@ -10,4 +10,4 @@
 >
 > Thanks, Northwind HR
 
-Not started yet.
+Implemented for the pilot. See [issues and fixes](README.md#issues-found-and-fixes) for the summary, [architecture](docs/ARCHITECTURE.md) for privacy and deletion behaviour, and [rollout notes](docs/ROLLOUT.md) for open client questions.

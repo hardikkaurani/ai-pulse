@@ -1,33 +1,44 @@
-import logging
+"""Configuration fails closed; setup generates a local secret outside Git."""
+
 import os
+from pathlib import Path
+from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+from dotenv import load_dotenv
 
-# Load .env if present
-_env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-if os.path.exists(_env_path):
-    for line in open(_env_path):
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip())
-
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower().strip()
-
-# Secure default >= 32 characters for HMAC SHA-256 (RFC 7518) in development
-DEFAULT_DEV_SECRET = "ai-pulse-development-secret-key-32-bytes-long"
-SECRET_KEY = os.getenv("SECRET_KEY", DEFAULT_DEV_SECRET)
-
-if ENVIRONMENT == "production":
-    if SECRET_KEY in (DEFAULT_DEV_SECRET, "ai-pulse-dev-secret"):
-        raise RuntimeError(
-            "CRITICAL SECURITY CONFIGURATION ERROR: SECRET_KEY must be explicitly set "
-            "to a unique, high-entropy secret in production environments."
-        )
-
+ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / ".env")
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if len(SECRET_KEY) < 32 or SECRET_KEY.startswith(("ai-pulse-dev", "pulse-7f")):
+    raise RuntimeError(
+        "Set a new SECRET_KEY of at least 32 characters. Run scripts/setup.py."
+    )
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./aipulse.db")
-AI_MODE = os.getenv("AI_MODE", "mock").lower().strip()  # "mock" or "live"
+# Hosting providers supply either postgres:// or postgresql://. Select the
+# installed Psycopg 3 driver explicitly while preserving credentials/options.
+for prefix in ("postgres://", "postgresql://"):
+    if DATABASE_URL.startswith(prefix):
+        DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len(prefix) :]
+        break
+AI_MODE = os.getenv("AI_MODE", "mock")
+if AI_MODE not in {"mock", "live"}:
+    raise RuntimeError("AI_MODE must be mock or live")
 LLM_API_URL = os.getenv("LLM_API_URL", "")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
-TOKEN_HOURS = int(os.getenv("TOKEN_HOURS", "12"))
+if AI_MODE == "live":
+    url = urlparse(LLM_API_URL)
+    if not LLM_MODEL or not url.hostname or url.scheme not in {"http", "https"}:
+        raise RuntimeError(
+            "Live mode requires a model and an HTTP(S) chat-completions URL"
+        )
+    if url.scheme != "https" and url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise RuntimeError("Remote model endpoints require HTTPS")
+CORS_ORIGINS = os.getenv(
+    "CORS_ORIGINS",
+    os.getenv("RENDER_EXTERNAL_URL", "http://localhost:5173,http://127.0.0.1:5173"),
+).split(",")
+TOKEN_HOURS = 1
+STATIC_DIR = os.getenv("STATIC_DIR", "")
+MIN_GROUP_SIZE = 5
+PROMPT_VERSION = "pulse-rubric-v3"

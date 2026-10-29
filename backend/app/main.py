@@ -1,69 +1,83 @@
-import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from .db import Base, engine, SessionLocal
-from . import models, seed
-from .config import ENVIRONMENT
-from .routes import auth_routes, diagnostic, reports, dashboard, insights
+from . import config
+from .routes import auth_routes, dashboard, diagnostic, reports
 
-Base.metadata.create_all(bind=engine)
-
-# Auto-seed initial demo accounts on first run if database is empty
-try:
-    with SessionLocal() as _db:
-        if _db.query(models.User).count() == 0:
-            seed.run(reset=False)
-except Exception:
-    pass
-
-app = FastAPI(title="AI Pulse API")
-
-cors_origins_raw = os.getenv("CORS_ORIGINS", "").strip()
-if cors_origins_raw:
-    origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
-elif ENVIRONMENT == "production":
-    origins = ["https://ai-pulse-rho-one.vercel.app"]
-else:
-    origins = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ]
-
-# If wildcard origin is explicitly requested, credentials must be disabled per CORS specification
-allow_creds = origins != ["*"]
-
+app = FastAPI(title="AI Pulse API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=allow_creds,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=config.CORS_ORIGINS,
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+class BodyLimit:
+    """Bound the body even when Content-Length is absent or untruthful."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] in {"GET", "HEAD", "OPTIONS"}:
+            return await self.app(scope, receive, send)
+        messages, size = [], 0
+        while True:
+            msg = await receive()
+            if msg["type"] == "http.disconnect":
+                return
+            size += len(msg.get("body", b""))
+            if size > 65536:
+                return await JSONResponse(
+                    {"detail": "Request is too large."}, status_code=413
+                )(scope, receive, send)
+            messages.append(msg)
+            if not msg.get("more_body"):
+                break
+
+        async def replay():
+            return messages.pop(0) if messages else await receive()
+
+        await self.app(scope, replay, send)
+
+
+app.add_middleware(BodyLimit)
+
+
+@app.middleware("http")
+async def response_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, exc):
+    # Pydantic errors can echo submitted passwords/answers. Return only a generic safe message.
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Please check the required fields and answer lengths."},
+    )
+
 
 app.include_router(auth_routes.router)
 app.include_router(diagnostic.router)
 app.include_router(reports.router)
 app.include_router(dashboard.router)
-app.include_router(insights.router)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "ai_mode": config.AI_MODE}
 
 
-@app.get("/seed")
-def trigger_seed():
-    """Idempotently seed demo accounts if the database is empty in non-production environments."""
-    if ENVIRONMENT == "production":
-        raise HTTPException(status_code=403, detail="Seeding is disabled in production environments")
-
-    with SessionLocal() as db:
-        user_count = db.query(models.User).count()
-        if user_count == 0:
-            seed.run(reset=False)
-            return {"status": "seeded", "message": "Demo data seeded successfully"}
-        return {"status": "already_seeded", "users": user_count}
+# API routes must precede this mount. Only the built frontend is served, never
+# the backend directory containing configuration or the persistent database.
+if config.STATIC_DIR:
+    app.mount("/", StaticFiles(directory=config.STATIC_DIR, html=True), name="web")

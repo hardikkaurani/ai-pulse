@@ -1,0 +1,121 @@
+{
+  "model": "gemini-3.5-flash-lite",
+  "prompt_version": "pulse-rubric-v1",
+  "cases": 10,
+  "valid_outputs": 10,
+  "score_matches": 10,
+  "exact_risk_matches": 8,
+  "limitation": "Small author-written smoke set. No external validation or measured employment validity.",
+  "results": [
+    {
+      "case": "no-use",
+      "valid": true,
+      "score": 1,
+      "score_in_range": true,
+      "flags_exact": true,
+      "missing_flags": [],
+      "extra_flags": [],
+      "seconds": 1.29
+    },
+    {
+      "case": "occasional",
+      "valid": true,
+      "score": 2,
+      "score_in_range": true,
+      "flags_exact": true,
+      "missing_flags": [],
+      "extra_flags": [],
+      "seconds": 1.29
+    },
+    {
+      "case": "regular-checked",
+      "valid": true,
+      "score": 4,
+      "score_in_range": true,
+      "flags_exact": true,
+      "missing_flags": [],
+      "extra_flags": [],
+      "seconds": 2.28
+    },
+    {
+      "case": "reusable",
+      "valid": true,
+      "score": 5,
+      "score_in_range": true,
+      "flags_exact": true,
+      "missing_flags": [],
+      "extra_flags": [],
+      "seconds": 2.18
+    },
+    {
+      "case": "customer-disclosure",
+      "valid": true,
+      "score": 3,
+      "score_in_range": true,
+      "flags_exact": false,
+      "missing_flags": [],
+      "extra_flags": [
+        "confidential_data_shared"
+      ],
+      "seconds": 1.17
+    },
+    {
+      "case": "confidential-disclosure",
+      "valid": true,
+      "score": 3,
+      "score_in_range": true,
+      "flags_exact": true,
+      "missing_flags": [],
+      "extra_flags": [],
+      "seconds": 3.41
+    },
+    {
+      "case": "unreviewed",
+      "valid": true,
+      "score": 3,
+      "score_in_range": true,
+      "flags_exact": true,
+      "missing_flags": [],
+      "extra_flags": [],
+      "seconds": 1.05
+    },
+    {
+      "case": "policy-unknown",
+      "valid": true,
+      "score": 2,
+      "score_in_range": true,
+      "flags_exact": false,
+      "missing_flags": [],
+      "extra_flags": [
+        "unreviewed_output"
+      ],
+      "seconds": 2.11
+    },
+    {
+      "case": "negation",
+      "valid": true,
+      "score": 4,
+      "score_in_range": true,
+      "flags_exact": true,
+      "missing_flags": [],
+      "extra_flags": [],
+      "seconds": 1.63
+    },
+    {
+      "case": "injection",
+      "valid": true,
+      "score": 1,
+      "score_in_range": true,
+      "flags_exact": true,
+      "missing_flags": [],
+      "extra_flags": [],
+      "seconds": 1.12
+    }
+  ],
+  "run_date": "2026-10-28",
+  "evaluation_kind": "Iterative development calibration; not a held-out benchmark",
+  "generation": {
+    "reasoning_effort": "low",
+    "max_tokens": 2048
+  }
+}

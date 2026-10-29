@@ -27,8 +27,12 @@ PEOPLE_BLUEPEAK = [
 ]
 
 
-def run():
-    Base.metadata.drop_all(bind=engine)
+DEMO_PASSWORD_HASH = "$2b$12$UtmExIoIBtjPQEiqXM5HZ.r92138pjdpXziSuRthXppJSR7QSaR7m"
+
+
+def run(reset: bool = True):
+    if reset:
+        Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
@@ -53,7 +57,7 @@ def run():
         for name, email, dept, role, job_role, seniority in people:
             u = users.get(email)
             if not u:
-                u = models.User(name=name, email=email, password_hash=hash_password("pulse123"))
+                u = models.User(name=name, email=email, password_hash=DEMO_PASSWORD_HASH)
                 db.add(u)
                 db.flush()
                 users[email] = u
@@ -90,4 +94,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    run(reset=True)

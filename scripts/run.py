@@ -9,7 +9,9 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-_venv_python = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+_venv_python = (
+    ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+)
 python = _venv_python if _venv_python.exists() else Path(sys.executable)
 node = shutil.which("node")
 if not python.exists() or not node:

@@ -12,8 +12,9 @@ from ..auth import (
     DUMMY_HASH,
 )
 
+from ..services.rate_limit import rate_limit, client_ip
+
 router = APIRouter(prefix="/auth", tags=["auth"])
-from ..services.rate_limit import rate_limit
 
 
 class LoginIn(BaseModel):
@@ -46,7 +47,7 @@ def user_info(user):
 
 @router.post("/login")
 def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
-    rate_limit("login:" + (request.client.host if request.client else "unknown"))
+    rate_limit("login:" + client_ip(request))
     user = db.query(models.User).filter_by(email=body.email.strip().lower()).first()
     valid = verify_password(body.password, user.password_hash if user else DUMMY_HASH)
     if not user or not valid:

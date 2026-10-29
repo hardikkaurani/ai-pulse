@@ -24,7 +24,13 @@ FastAPI routes handle transport and authorization. Small service modules own que
 
 Local development uses Vite on port 5173, FastAPI on 8000 and a private SQLite file. The root Dockerfile builds the frontend and serves its static files through FastAPI after the API routes. Hosted browser requests use the same HTTPS origin. The image runs as an unprivileged user and never includes the local environment file or database.
 
+Liveness and readiness are explicitly decoupled:
+- `GET /health` acts as a process liveness probe.
+- `GET /ready` verifies database connectivity and pool availability via an active probe query, returning HTTP 503 if the database becomes unreachable.
+- `X-Request-ID` is assigned or preserved across all requests for end-to-end tracing and audit logging without logging sensitive credentials or answers.
+
 On Render, `render.yaml` connects the single web worker to a separate PostgreSQL database over the internal network. SQLAlchemy uses psycopg for PostgreSQL; the models and Alembic schema support both databases. Startup requires explicit storage and a stable signing secret, applies migrations and seeds fictional accounts only when the database has no users. A restart therefore cannot reset existing answers. The database connection checks stale pooled connections before reuse. The Google key stays in Render's private runtime environment.
+
 
 The free hosting choice is for the assessment demo: the website sleeps when idle, and the database expires after 30 days without an upgrade. Separate storage establishes persistence across web-service restarts, not a backup or recovery guarantee. Horizontal scaling and production operations remain out of scope.
 

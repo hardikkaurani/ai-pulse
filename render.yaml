@@ -4,10 +4,10 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    branch: feat/client-pilot
+    branch: main
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     envVars:
       - key: DATABASE_URL
         fromDatabase:

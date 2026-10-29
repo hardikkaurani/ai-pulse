@@ -59,7 +59,8 @@ A score alone leaves employees asking what to do next. The plan selects up to th
 python scripts/check.py
 ```
 
-**82 backend tests, 10 interface tests and the production build passed.** CI also covers PostgreSQL and container startup. Browser checks covered live scoring, saved progress, company switching and deletion. [Evidence and scope](docs/VERIFICATION.md).
+**103 backend tests, 10 interface tests and the production build passed.** CI covers automated checks, PostgreSQL 18 migration parity and container startup. Load testing verified pilot SLOs ($p_{50} = 71.6\text{ms}, p_{95} = 187.8\text{ms}$ at 5 concurrency, 0 errors). Browser checks covered live scoring, saved progress, company switching and deletion. Operational procedures and disaster recovery drills are documented in the [Operational Runbook](docs/RUNBOOK.md). [Evidence and scope](docs/VERIFICATION.md).
+
 
 This is a single-worker pilot. SSO, managed backups, load testing and independent model validation remain deferred. Scores describe self-reported habits, not verified job performance. The free hosted database expires after 30 days unless upgraded. [Rollout notes](docs/ROLLOUT.md).
 

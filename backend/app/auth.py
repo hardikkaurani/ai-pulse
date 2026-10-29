@@ -27,6 +27,7 @@ def verify_password(password: str, hashed: str) -> bool:
     if hashed.startswith(("$2a$", "$2b$", "$2y$")):
         try:
             import bcrypt
+
             return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
         except Exception:
             return False

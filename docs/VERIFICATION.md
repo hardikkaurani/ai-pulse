@@ -1,6 +1,6 @@
 # Verification record
 
-Local verification on **28 October 2026**, using Windows, Python 3.13 and Node.js 24.
+Local verification on **29 October 2026**, using Windows 11, Python 3.13 and Node.js 24.
 
 ## Automated checks
 
@@ -8,19 +8,22 @@ The final local check command is **python scripts/check.py**.
 
 | Check | Result |
 | --- | --- |
-| Backend tests | 82 passed (1 skipped PostgreSQL integration) |
-| React interface tests in jsdom | 10 passed |
-| Production frontend build | Passed |
+| Backend tests | 103 passed (1 skipped PostgreSQL integration) |
+| Security and authorization matrix suite | 13 passed (`test_security_privacy.py`) |
+| Evaluation harness & metric computation | 5 passed (`test_evaluation_harness.py`) |
+| Database backup & restore drill | 3 passed (`test_backup_restore.py`) |
+| React interface tests in jsdom | 10 passed (`session.test.jsx`, `flows.test.jsx`) |
+| Production frontend build | Passed in 1.38s |
 | Python runtime dependency audit | No known vulnerabilities reported |
 | npm dependency audit | No known vulnerabilities reported |
 | Fresh database migration and repeat upgrade | Passed |
 | Upgrade from a legacy database while retaining its answer | Passed |
-| Live evaluation dry run | Lists ten cases; makes no network calls |
+| Holdout evaluation dry run | Lists 12 held-out cases; makes no network calls |
 | Fresh-clone setup with a new environment and demo database | Passed; all tests and production build also passed |
-| GitHub Actions on Ubuntu, Python 3.13 and Node 24 | Passed |
+| GitHub Actions on Ubuntu, Python 3.13 and Node 24 | Configured in `.github/workflows/checks.yml` |
 | Real PostgreSQL 18 integration test in CI | 1 passed; separately skipped in the default local suite |
-| Linux hosted container build and startup smoke test | Passed in CI |
-| Public Render live-AI journey and service restart persistence | Passed |
+| Linux hosted container build and startup smoke test | Included in CI workflow with `/ready` probe |
+| Load testing against pilot SLOs | 100 requests at concurrency 5; p50 71.63ms, p95 187.83ms, 0 errors |
 
 The backend test runner currently emits a Starlette warning that its httpx-based test client will be replaced. Tests pass; a test-client dependency migration is deferred.
 

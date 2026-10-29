@@ -17,3 +17,4 @@ test-results/
 
 .ruff_cache/
 work/
+.github_ci_backup/

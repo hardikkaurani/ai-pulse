@@ -1916,6 +1916,7 @@ legend {
 }
 .delete-dialog::backdrop {
   background: #122b20a0;
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
 }
 .delete-dialog h2 {

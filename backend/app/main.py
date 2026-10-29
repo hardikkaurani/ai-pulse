@@ -1,10 +1,13 @@
+import uuid
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from . import config
+from .db import engine
 from .routes import auth_routes, dashboard, diagnostic, reports
 
 app = FastAPI(title="AI Pulse API", version="1.0.0")
@@ -50,7 +53,9 @@ app.add_middleware(BodyLimit)
 
 @app.middleware("http")
 async def response_headers(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
     response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -75,6 +80,23 @@ app.include_router(dashboard.router)
 @app.get("/health")
 def health():
     return {"status": "ok", "ai_mode": config.AI_MODE}
+
+
+@app.get("/ready")
+def ready():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ready", "database": "healthy", "ai_mode": config.AI_MODE}
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "database": "unreachable",
+                "ai_mode": config.AI_MODE,
+            },
+        )
 
 
 # API routes must precede this mount. Only the built frontend is served, never

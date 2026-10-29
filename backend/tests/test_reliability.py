@@ -333,9 +333,10 @@ def test_risk_counts_protect_both_flagged_and_unflagged_people(size, flagged, ex
     ]
     group = publish([{"name": "Team", "people": rows}])[0]
     assert group["responded"] == size
-    assert next(r for r in group["risks"] if r["key"] == "unreviewed_output")[
-        "people"
-    ] == expected
+    assert (
+        next(r for r in group["risks"] if r["key"] == "unreviewed_output")["people"]
+        == expected
+    )
 
 
 @pytest.mark.parametrize(

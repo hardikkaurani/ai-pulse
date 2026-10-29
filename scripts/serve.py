@@ -20,7 +20,7 @@ def prepare():
     if not (static_dir / "index.html").is_file():
         raise SystemExit("STATIC_DIR must contain the built frontend index.html.")
     try:
-        port = int(os.environ.get("PORT", "8000"))
+        port = int(str(os.environ.get("PORT", "8000")).strip())
         if not 0 < port < 65536:
             raise ValueError
     except ValueError:

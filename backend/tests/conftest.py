@@ -1,20 +1,30 @@
 import os
+from pathlib import Path
+import sys
 import tempfile
 import pytest
 
+_backend_dir = Path(__file__).resolve().parent.parent
+_root_dir = _backend_dir.parent
+for p in (_root_dir, _backend_dir):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
+
 _test_dir = tempfile.TemporaryDirectory(prefix="ai-pulse-tests-")
+
 os.environ["DATABASE_URL"] = (
     "sqlite:///" + _test_dir.name.replace("\\", "/") + "/test.db"
 )
 os.environ["AI_MODE"] = "mock"
 os.environ["SECRET_KEY"] = "isolated-test-secret-never-use-in-deployment-123456"
 
-from fastapi.testclient import TestClient
-from app.main import app
-from app import seed
-from app.db import Base, engine
-from app.services.rate_limit import _attempts
-from functools import lru_cache
+from functools import lru_cache  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from app.main import app  # noqa: E402
+from app import seed  # noqa: E402
+from app.db import Base, engine  # noqa: E402
+from app.services.rate_limit import _attempts  # noqa: E402
+
 
 seed.hash_password = lru_cache(maxsize=1)(seed.hash_password)
 
@@ -49,3 +59,33 @@ def login(client, email, org_name=None):
         assert result.status_code == 200
         token = result.json()["token"]
     return {"Authorization": f"Bearer {token}"}, data
+
+
+def employee(client, email="priya@northwind.test", org="Northwind Logistics"):
+    return login(client, email, org)[0]
+
+
+def admin(client, email="asha@northwind.test", org="Northwind Logistics"):
+    return login(client, email, org)[0]
+
+
+def payload(
+    client,
+    headers,
+    open_answer="I used an approved tool to draft a fictional reply and reviewed it.",
+    index=2,
+):
+    qs = client.get("/diagnostic/questions", headers=headers).json()
+    return {
+        "answers": [
+            {
+                "question_id": q["id"],
+                "answer": q["options"][index] if q["type"] == "mcq" else open_answer,
+            }
+            for q in qs
+        ]
+    }
+
+
+def report(client, headers):
+    return client.get("/reports/me", headers=headers).json()

@@ -1,0 +1,64 @@
+{
+  "timestamp": "2026-10-29T10:47:20.602536+00:00",
+  "model": "gemini-3.5-flash-lite",
+  "prompt_version": "pulse-rubric-v3",
+  "split": "holdout",
+  "dataset_sha256": "d171c58060bfcf068565e88ecaddf9c480edbc29c72a7105eea760c2731cdfa3",
+  "metrics": {
+    "total_cases": 12,
+    "valid_outputs": 12,
+    "invalid_output_rate": 0.0,
+    "score_in_range_rate": 1.0,
+    "exact_risk_match_rate": 1.0,
+    "score_mae": 0.0417,
+    "macro_f1": 1.0,
+    "per_class_risks": {
+      "customer_data_shared": {
+        "confusion": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "tn": 11
+        },
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "confidential_data_shared": {
+        "confusion": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 0,
+          "tn": 10
+        },
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "unreviewed_output": {
+        "confusion": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 0,
+          "tn": 10
+        },
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "policy_unaware": {
+        "confusion": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 0,
+          "tn": 10
+        },
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    }
+  },
+  "limitation": "Synthetic evaluation set. No measured domain or employment validity. Results reflect rubric adherence on isolated text snippets."
+}
+

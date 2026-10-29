@@ -8,7 +8,7 @@ The final local check command is **python scripts/check.py**.
 
 | Check | Result |
 | --- | --- |
-| Backend tests | 80 passed |
+| Backend tests | 82 passed (1 skipped PostgreSQL integration) |
 | React interface tests in jsdom | 10 passed |
 | Production frontend build | Passed |
 | Python runtime dependency audit | No known vulnerabilities reported |
@@ -110,7 +110,7 @@ database storage is configured separately on a persistent volume. New integratio
 checks run hosted preparation twice against a disposable SQLite file, confirm a
 saved change survives, verify login and protected API responses with the static
 mount enabled, and check that private file paths return 404. Missing explicit
-storage configuration is rejected. All 80 backend tests, 10 interface tests and
+storage configuration is rejected. All 82 backend tests, 10 interface tests and
 the frontend build passed locally.
 
 The production frontend was also built with the public-demo notice and an empty
@@ -131,7 +131,7 @@ database was not uploaded. Google credentials are private runtime variables;
 the image and Git history contain no new provider secret.
 
 All verification suites pass:
-80 backend tests and 10 interface tests with a production build; the actual
+82 backend tests and 10 interface tests with a production build; the actual
 Linux container build/startup smoke test; and one real PostgreSQL integration
 test. The PostgreSQL test covers fresh/repeated migrations, seed, authentication,
 assessment completion, saved activity state across a new Python process,

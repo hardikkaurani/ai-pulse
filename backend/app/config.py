@@ -34,10 +34,28 @@ if AI_MODE == "live":
         )
     if url.scheme != "https" and url.hostname not in {"localhost", "127.0.0.1", "::1"}:
         raise RuntimeError("Remote model endpoints require HTTPS")
-CORS_ORIGINS = os.getenv(
-    "CORS_ORIGINS",
-    os.getenv("RENDER_EXTERNAL_URL", "http://localhost:5173,http://127.0.0.1:5173"),
-).split(",")
+DEFAULT_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://ai-pulse-rho-one.vercel.app",
+]
+if os.getenv("RENDER_EXTERNAL_URL"):
+    ext = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+    if ext and ext not in DEFAULT_ORIGINS:
+        DEFAULT_ORIGINS.append(ext)
+
+_custom_cors = os.getenv("CORS_ORIGINS", "")
+if _custom_cors:
+    CORS_ORIGINS = [origin.strip() for origin in _custom_cors.split(",") if origin.strip()]
+    for default_origin in DEFAULT_ORIGINS:
+        if default_origin not in CORS_ORIGINS:
+            CORS_ORIGINS.append(default_origin)
+else:
+    CORS_ORIGINS = DEFAULT_ORIGINS
+
+SEED_DEMO = os.getenv("SEED_DEMO", "true").lower() in {"1", "true", "yes"}
 TOKEN_HOURS = 1
 STATIC_DIR = os.getenv("STATIC_DIR", "")
 MIN_GROUP_SIZE = 5

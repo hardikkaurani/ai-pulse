@@ -358,3 +358,74 @@ def test_differencing_attack_audit(client):
         assert "email" not in dept
         if not dept["protected"]:
             assert isinstance(dept["average_score"], (int, float))
+
+
+def test_cors_preflight_and_origin_allowlist(client):
+    """CORS must permit Vercel production frontend and reject untrusted origins."""
+    res_vercel = client.options(
+        "/auth/login",
+        headers={
+            "Origin": "https://ai-pulse-rho-one.vercel.app",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
+        },
+    )
+    assert res_vercel.status_code == 200
+    assert (
+        res_vercel.headers.get("access-control-allow-origin")
+        == "https://ai-pulse-rho-one.vercel.app"
+    )
+    assert "POST" in res_vercel.headers.get("access-control-allow-methods", "")
+
+    res_preview = client.options(
+        "/auth/login",
+        headers={
+            "Origin": "https://ai-pulse-branch-preview.vercel.app",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
+        },
+    )
+    assert res_preview.status_code == 200
+    assert (
+        res_preview.headers.get("access-control-allow-origin")
+        == "https://ai-pulse-branch-preview.vercel.app"
+    )
+
+    res_untrusted = client.options(
+        "/auth/login",
+        headers={
+            "Origin": "https://untrusted-attacker.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
+        },
+    )
+    assert (
+        res_untrusted.status_code == 400
+        or "access-control-allow-origin" not in res_untrusted.headers
+    )
+
+
+def test_login_demo_credentials_and_error_classification(client):
+    """Demo login succeeds with 200 and invalid credentials return 401 without network/CORS error."""
+    res_valid = client.post(
+        "/auth/login",
+        json={"email": "asha@northwind.test", "password": "pulse123"},
+        headers={"Origin": "https://ai-pulse-rho-one.vercel.app"},
+    )
+    assert res_valid.status_code == 200
+    data = res_valid.json()
+    assert "token" in data
+    assert data["email"] == "asha@northwind.test"
+    assert (
+        res_valid.headers.get("access-control-allow-origin")
+        == "https://ai-pulse-rho-one.vercel.app"
+    )
+
+    res_invalid = client.post(
+        "/auth/login",
+        json={"email": "asha@northwind.test", "password": "wrong-password"},
+        headers={"Origin": "https://ai-pulse-rho-one.vercel.app"},
+    )
+    assert res_invalid.status_code == 401
+    assert res_invalid.json()["detail"] == "Email or password is incorrect."
+

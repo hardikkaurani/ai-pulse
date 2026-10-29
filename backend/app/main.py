@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import uuid
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -10,10 +11,24 @@ from . import config
 from .db import engine
 from .routes import auth_routes, dashboard, diagnostic, reports
 
-app = FastAPI(title="AI Pulse API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if config.SEED_DEMO:
+        try:
+            from .seed import run as seed_db
+
+            seed_db()
+        except Exception:
+            pass
+    yield
+
+
+app = FastAPI(title="AI Pulse API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
+    allow_origin_regex=r"https://ai-pulse.*\.vercel\.app",
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )

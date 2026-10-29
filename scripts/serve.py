@@ -28,7 +28,7 @@ def prepare():
     subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"], cwd=BACKEND, check=True
     )
-    if os.environ.get("SEED_DEMO") == "true":
+    if os.environ.get("SEED_DEMO", "true").lower() in {"1", "true", "yes"}:
         subprocess.run(
             [sys.executable, "-m", "app.seed", "--demo"], cwd=BACKEND, check=True
         )

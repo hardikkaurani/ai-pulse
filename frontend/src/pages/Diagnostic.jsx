@@ -49,6 +49,21 @@ export default function Diagnostic({ onDone, onCancel }) {
       return;
     }
 
+    const tooShortOpen = questions.find((q) => {
+      if (q.type === "open") {
+        const val = String(answers[q.id] || "").trim();
+        return val.length < 10;
+      }
+      return false;
+    });
+
+    if (tooShortOpen) {
+      setValidationError(
+        "Free-text answers must be at least 10 characters long to provide meaningful context."
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload = Object.entries(answers).map(([question_id, answer]) => ({

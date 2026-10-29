@@ -12,7 +12,6 @@ export async function api(path, options = {}) {
     const response = await fetch(BASE + path, {
       ...options,
       signal: options.signal || controller.signal,
-      cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         ...(getToken() ? { Authorization: "Bearer " + getToken() } : {}),
